@@ -1,20 +1,27 @@
+''' 
+***************************************************************
+Author: LU
+Date: Nov 2020
+Description:
+    CNN architecture used for thalamic nuclei segmentation in
+MPRAGE images.  
+***************************************************************
+'''
 
-
-
+# import files
 import sys, os
 import tensorflow as tf
 from keras.models import Model
-from keras.layers import Input, Dropout, concatenate, BatchNormalization,Activation,
+from keras.layers import Input, Dropout, concatenate, BatchNormalization,Activation
 from keras.layers.convolutional import Conv3D, MaxPooling3D, Conv3DTranspose
-from keras.layers.convolutional import Conv2D, MaxPooling2D, Conv2DTranspose
 from keras import optimizers
 import keras.backend as K
 from keras.losses import binary_crossentropy as bce
 from keras.utils import multi_gpu_model
 
 
-
-vgg_basepath = '/array/ssd/umapathy/Code/OASIS3/Pretrained/'
+# VGG basepath for perceptual loss calculation
+vgg_basepath = './Pretrained_models/Pretrained/'
 
 if vgg_basepath not in sys.path:
     sys.path.insert(0,vgg_basepath)
@@ -55,8 +62,8 @@ def unet_block_expand(block_input,numFts,concat_block,conv_kernel):
     up = Activation('relu')(up)
     return up
 
-def UNET3D_Segmentation(ipShape,blkSize=5,nChannels=1,num_classes=1,conv_kernel=(3,3,3),final_Activation='softmax'):  
-    inputs = Input((ipShape[0],ipShape[1],blkSize,nChannels))
+def UNET3D_Segmentation(width,height,blkSize=5,nChannels=1,num_classes=1,conv_kernel=(3,3,3),final_Activation='softmax'):  
+    inputs = Input((width,height,blkSize,nChannels))
     # Contracting path
     down_blk1 = unet_block_contract(inputs,16,32,conv_kernel,upsample_flag=False)
     down_blk2 = unet_block_contract(down_blk1,32,64,conv_kernel)
@@ -91,7 +98,7 @@ def UNET3D_ContrastSynthesis(ipShape,name):
     return model 
 
 # Base Model for MPRAGE to WMn-MPRAGE Contrast Synthesis with perceptual loss
-def UNET3D_ContrastSynthesis_perceptual(ipShape,optimizer,visible_gpu):
+def UNET3D_ContrastSynthesis_perceptual(ipShape,optimizer,visible_gpu,pretrained_weights=None):
     from vgg16_modified import VGG16
     vgg16_weights = vgg_basepath + 'vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5'
     vgg16 = VGG16(include_top=False, weights='imagenet', weights_path=vgg16_weights,
@@ -115,8 +122,12 @@ def UNET3D_ContrastSynthesis_perceptual(ipShape,optimizer,visible_gpu):
     csfn_ip = Input(shape=ipShape, name='csfn_input')
     wmn_op = CS_model(csfn_ip)
     final_model = Model(inputs=csfn_ip, outputs=wmn_op,name='csfn_to_wmn')
-    if len(visible_gpu)>1: 
-        final_model = multi_gpu_model(final_model,gpus=len(visible_gpu))
+    num_gpu = len(visible_gpu.split(','))
+    if num_gpu>1: 
+        final_model = multi_gpu_model(final_model,gpus=num_gpu)
+    if pretrained_weights:
+        print('Loading pretrained weights for synthesis...')
+        final_model.load_weights(pretrained_weights)
     final_model.compile(optimizer = optimizer, loss =custom_perceptualLoss(model_vgg) )
     return final_model 
 
@@ -152,11 +163,14 @@ def initializeSegmentationCNN(model_architecture, params, pretrained_weights = N
     ipShape = params['ipShape']
     num_classes = params['num_classes']  
     model = model_architecture(ipShape[0],ipShape[1],ipShape[2],nChannels=ipShape[3],num_classes=num_classes,conv_kernel=params['conv_kernel'],final_Activation='sigmoid')
-    if len(params['visible_gpu'])>1: 
-        model = multi_gpu_model(model,gpus=len(params['visible_gpu']))
+    num_gpu = len(params['visible_gpu'].split(','))
     Adamopt = params['optimizer']
+    if num_gpu > 1: 
+        model = multi_gpu_model(model,gpus=num_gpu)
     if pretrained_weights:
+        print('Loading pretrained weights for segmentation...')
         model.load_weights(pretrained_weights)
+
     model.compile(loss={'nuclei_label':segmentation_loss(num_classes), 'thalamus_label': segmentation_loss(1)}, 
                   optimizer=Adamopt,
                   loss_weights={'nuclei_label':1., 'thalamus_label':0.5})
