@@ -1,1 +1,0 @@
-This subject is 3299 from MPRAGE
