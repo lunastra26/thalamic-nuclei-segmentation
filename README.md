@@ -7,6 +7,6 @@ We trained two 3D segmentation frameworks using MPRAGE images (n=35 subjects): a
 
 More details are available in the following article:
 
-L Umapathy, MB Keerthivasan, NM Zahr, Ali Bilgin, and Manojkumar Saranathan. ***Convolutional Neural Network based frameworks for fast automatic segmentation of thalamic nuclei from native and synthesized contrast structural MRI***. To appear in Neuroinformatics.
+L Umapathy, MB Keerthivasan, NM Zahr, A Bilgin, and M Saranathan. ***Convolutional Neural Network based frameworks for fast automatic segmentation of thalamic nuclei from native and synthesized contrast structural MRI***. To appear in Neuroinformatics.
 
 Initial submission available in the following [arXiv](https://arxiv.org/abs/2012.09386)
